@@ -4,7 +4,6 @@ import React from "react";
 import MarqueeText from "react-marquee-text";
 import "react-marquee-text/dist/styles.css";
 
-// API Response অনুযায়ী Interface
 export interface IProduct {
   id: number | string;
   slug: string;
@@ -34,7 +33,7 @@ const PriceTicker = () => {
           "https://api.api-store.workers.dev/api/bazardor/products"
         );
         const data = await res.json();
-        // API থেকে array বা data property আসবে
+      
         setProducts(Array.isArray(data) ? data : data.data || []);
       } catch (error) {
         console.error("Failed to fetch products:", error);

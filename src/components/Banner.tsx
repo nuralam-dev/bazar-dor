@@ -44,7 +44,7 @@ const Banner = () => {
         {/* Right Side Illustration */}
         <div className="w-48 sm:w-64 md:w-80 flex-shrink-0 flex justify-center items-center">
           <Image
-            src="/bazar-hero.png" // আপনার public/basket.png ফোল্ডারে ছবিটি রাখবেন
+            src="/bazar-hero.png"
             alt="বাজার ঝুড়ি"
             width={320}
             height={280}

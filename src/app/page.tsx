@@ -1,13 +1,13 @@
-import Banner from '@/components/Banner';
-import PriceOverview from '@/components/PriceOverview';
-
-import React from 'react';
+import AllProducts from "@/components/AllProducts";
+import Banner from "@/components/Banner";
+import PriceOverview from "@/components/PriceOverview";
 
 const homePage = () => {
   return (
     <div>
-<Banner></Banner>
-<PriceOverview></PriceOverview>
+      <Banner></Banner>
+      <PriceOverview></PriceOverview>
+      <AllProducts></AllProducts>
     </div>
   );
 };
