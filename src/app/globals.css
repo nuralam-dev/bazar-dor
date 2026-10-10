@@ -1,3 +1,47 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 
+/*
+  Colors from the Figma design.
+  HeroUI components read these variables, so changing them here
+  changes every HeroUI component (Button, Card, Input...).
+  Tailwind classes like bg-surface, text-accent, border-border use them too.
+*/
+:root {
+  --background: #f0f5f0; /* page background */
+  --foreground: #1d271f; /* main text */
+  --surface: #fafcfa; /* cards */
+  --overlay: #fafcfa; /* dropdown and select popups */
+  --border: #e1e8e1;
+  --field-background: #fafcfa; /* inputs */
+  --field-border: #e1e8e1;
+  --field-border-width: 1px;
+  --accent: #05893e; /* main green */
+  --accent-foreground: #f3fbf4;
+  --success: #1a9951; /* price went down */
+  --danger: #d03739; /* price went up */
+}
 
+html {
+  scroll-behavior: smooth; /* the hero button scrolls smoothly to all products */
+}
+
+body {
+  font-family: var(--font-hind-siliguri), sans-serif;
+}
+
+/* price ticker: moves the list to the left, then starts again */
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  animation: ticker 120s linear infinite;
+}
+
+/* stop the ticker when the mouse is over it */
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}

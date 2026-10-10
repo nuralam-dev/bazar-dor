@@ -1,223 +1,149 @@
+import { Card, Chip } from "@heroui/react";
+import { headers } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import MarketTable from "@/components/market-table";
+import { texts } from "@/data/texts";
+import { getProducts } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { changeText, formatPrice, showNumber, unitName } from "@/lib/format";
+import { getLang } from "@/lib/language";
+import { getProductCategoryName, getProductName } from "@/lib/names";
 
-// ইংরেজি সংখ্যাকে বাংলায় রূপান্তর করার হেলপার ফাংশন
-const toBanglaNum = (num: number | string): string => {
-  if (num === undefined || num === null) return "০";
-  const banglaDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
-  return num
-    .toString()
-    .replace(/\d/g, (digit) => banglaDigits[parseInt(digit)]);
+type Props = {
+  // slug is the last part of the address, for example "miniket-chal" in /product/miniket-chal
+  params: Promise<{ slug: string }>;
 };
 
-// Unit নাম বাংলায় রূপান্তর
-const getUnitBn = (unit: string): string => {
-  switch (unit?.toLowerCase()) {
-    case "kg":
-      return "প্রতি কেজি";
-    case "liter":
-    case "l":
-      return "প্রতি লিটার";
-    case "dozen":
-      return "প্রতি ডজন";
-    case "piece":
-    case "pcs":
-      return "প্রতি পিস";
-    default:
-      return `প্রতি ${unit}`;
-  }
-};
-
-interface ProductDetailsProps {
-  params: Promise<{
-    slug: string;
-  }>;
-}
-
-export default async function ProductDetailsPage({
-  params,
-}: ProductDetailsProps) {
+export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
+  const lang = await getLang();
+  const t = texts[lang];
 
-  let product = null;
-
-  try {
-    const res = await fetch(
-      `https://api.api-store.workers.dev/api/bazardor/products/${slug}`,
-      { next: { revalidate: 3600 } },
-    );
-    if (res.ok) {
-      product = await res.json();
-    }
-  } catch (error) {
-    console.error("Failed to fetch product details:", error);
+  // 1) this page is only for signed in users. If nobody is signed in, go to the sign in page.
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    redirect(`/signin?message=login&callbackUrl=/product/${slug}`);
   }
 
-  // ডাটা না পাওয়া গেলে ৪০৪ পেজ দেখাবে
-  if (!product) {
-    notFound();
+  // 2) find the product
+  const products = await getProducts();
+  const product = products.find((item) => item.slug === slug);
+  if (!product) notFound();
+
+  // 3) calculate the numbers
+  const unit = unitName(product.unit, lang);
+  const categoryName = getProductCategoryName(product, lang);
+
+  // the lowest and the highest price in all markets
+  const lowest = Math.min(...product.markets.map((market) => market.min));
+  const highest = Math.max(...product.markets.map((market) => market.max));
+
+  // average of all markets (the average of one market is (min + max) / 2)
+  let total = 0;
+  for (const market of product.markets) {
+    total = total + (market.min + market.max) / 2;
   }
+  const average = Math.round(total / product.markets.length);
 
-  // Market Calculation (Min, Max, Avg)
-  const allMins = product.markets?.map((m: any) => m.min) || [product.today];
-  const allMaxs = product.markets?.map((m: any) => m.max) || [product.today];
+  // how much the price changed since yesterday
+  const difference = product.today - product.yesterday;
+  let trend = t.noChange;
+  if (difference > 0) trend = t.wentUp;
+  if (difference < 0) trend = t.wentDown;
 
-  const overallMinPrice = Math.min(...allMins);
-  const overallMaxPrice = Math.max(...allMaxs);
-  const avgPrice =
-    product.today || Math.round((overallMinPrice + overallMaxPrice) / 2);
-
-  // Change Badge Direction & Color
-  const isUp = product.change?.dir === "up";
-  const isDown = product.change?.dir === "down";
+  let changeColor = "";
+  if (product.change.dir === "up") changeColor = "text-danger";
+  if (product.change.dir === "down") changeColor = "text-success";
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Back Link */}
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1 mb-6 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
-      >
-        ← হোম পেজে ফিরে যান
-      </Link>
+    <div className="mx-auto flex max-w-[1152px] flex-col gap-6 px-4 py-6">
+      {/* Home > Category > Product */}
+      <nav className="flex flex-wrap items-center gap-3 py-2 pl-1 text-sm">
+        <Link href="/" className="hover:text-accent">
+          {t.home}
+        </Link>
+        <Image src="/icons/chevron.svg" alt="" width={6} height={8} />
+        <Link href={`/category/${product.category}`} className="hover:text-accent">
+          {categoryName}
+        </Link>
+        <Image src="/icons/chevron.svg" alt="" width={6} height={8} />
+        <span>{getProductName(product, lang)}</span>
+      </nav>
 
-      {/* Top Header & Product Summary */}
-      <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-sm mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <div className="text-6xl sm:text-7xl bg-emerald-50/80 p-5 rounded-2xl flex items-center justify-center shrink-0">
-            {product.image || product.categoryIcon || "🛒"}
-          </div>
-
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="bg-emerald-100 text-[#008744] text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                <span>{product.categoryIcon}</span>
-                <span>{product.categoryNameBn}</span>
-              </span>
-              <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                {getUnitBn(product.unit)}
-              </span>
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">
-              {product.nameBn}
-            </h1>
-
-            <p className="text-gray-500 text-sm md:text-base">
-              {product.nameBn}-এর আজকের বাজার দর, সর্বনিম্ন ও সর্বোচ্চ দামের
-              বিস্তারিত তথ্য নিচে দেওয়া হলো।
-            </p>
-          </div>
-
-          {/* Today's Price & Change Badge */}
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 sm:text-right w-full sm:w-auto">
-            <p className="text-xs text-gray-500 font-medium mb-1">
-              আজকের গড় দাম
-            </p>
-            <div className="text-2xl md:text-3xl font-extrabold text-gray-900">
-              ৳ {toBanglaNum(product.today)}{" "}
-              <span className="text-xs font-normal text-gray-500">
-                / {getUnitBn(product.unit)}
-              </span>
-            </div>
-
-            {/* Percentage Badge */}
-            {product.change && (
-              <div className="mt-2">
-                <span
-                  className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-md ${
-                    isUp
-                      ? "bg-emerald-100 text-emerald-800"
-                      : isDown
-                        ? "bg-rose-100 text-rose-800"
-                        : "bg-gray-100 text-gray-700"
-                  }`}
-                >
-                  {isUp && "▲ "}
-                  {isDown && "▼ "}
-                  {!isUp && !isDown && "— "}
-                  {toBanglaNum(product.change.pct)}% (গতকাল থেকে)
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Price Summary Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-emerald-50/60 border border-emerald-100 p-5 rounded-2xl text-center">
-          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">
-            সর্বনিম্ন দাম
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-emerald-900">
-            ৳ {toBanglaNum(overallMinPrice)}
-          </p>
-        </div>
-
-        <div className="bg-blue-50/60 border border-blue-100 p-5 rounded-2xl text-center">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-            গড় দাম
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-blue-900">
-            ৳ {toBanglaNum(avgPrice)}
-          </p>
-        </div>
-
-        <div className="bg-rose-50/60 border border-rose-100 p-5 rounded-2xl text-center">
-          <p className="text-xs font-semibold text-rose-700 uppercase tracking-wide mb-1">
-            সর্বোচ্চ দাম
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-rose-900">
-            ৳ {toBanglaNum(overallMaxPrice)}
-          </p>
-        </div>
-      </div>
-
-      {/* Market-wise Prices */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-          <h2 className="text-lg md:text-xl font-bold text-gray-800">
-            বাজারভিত্তিক আজকের দাম
-          </h2>
-          <span className="text-xs text-gray-500 bg-white border px-2.5 py-1 rounded-md">
-            মোট বাজার: {toBanglaNum(product.markets?.length || 0)} টি
+      {/* emoji, name and today's price */}
+      <Card className="rounded-2xl border border-border p-5 shadow-none">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span className="flex size-20 shrink-0 items-center justify-center rounded-2xl bg-background text-4xl">
+            {product.image}
           </span>
+
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl leading-9 font-bold">{getProductName(product, lang)}</h1>
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <span>{t.perUnit(unit)}</span>
+              <span>·</span>
+              {/* category tag, it opens the category page */}
+              <Link href={`/category/${product.category}`}>
+                <Chip color="accent" variant="soft" size="sm">
+                  {product.categoryIcon} {categoryName}
+                </Chip>
+              </Link>
+            </p>
+            <p className="mt-2 text-sm">
+              {t.comparedToYesterday} <span className="font-semibold">{trend}</span>
+              {difference !== 0 && ` · ${showNumber(Math.abs(difference), lang)} ${t.currency}`}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-background px-5 pt-4 pb-[17px] text-center">
+            <p className="text-sm">{t.todayPrice}</p>
+            <p className="text-3xl leading-9 font-bold">{formatPrice(product.today, lang)}</p>
+            <p className="text-sm">{t.priceUnit(unit)}</p>
+            <p className={`mt-[3px] text-sm font-semibold ${changeColor}`}>{changeText(product.change, lang)}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="gap-6 rounded-2xl border border-border p-5 shadow-none">
+        {/* lowest, highest and average price */}
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg leading-7 font-semibold">{t.priceSummary}</h2>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Card className="gap-0 rounded-2xl border border-border px-6 py-4 shadow-none">
+              <p className="text-xs leading-[18px]">{t.lowestPrice}</p>
+              <p className="text-2xl leading-8 font-bold text-success">
+                {formatPrice(lowest, lang)} <span className="text-sm font-medium">{t.currency}</span>
+              </p>
+              <p className="text-xs leading-[18px]">{t.lowestHint}</p>
+            </Card>
+
+            <Card className="gap-0 rounded-2xl border border-border px-6 py-4 shadow-none">
+              <p className="text-xs leading-[18px]">{t.highestPrice}</p>
+              <p className="text-2xl leading-8 font-bold text-danger">
+                {formatPrice(highest, lang)} <span className="text-sm font-medium">{t.currency}</span>
+              </p>
+              <p className="text-xs leading-[18px]">{t.highestHint}</p>
+            </Card>
+
+            <Card className="gap-0 rounded-2xl border border-border px-6 py-4 shadow-none">
+              <p className="text-xs leading-[18px]">{t.averagePrice}</p>
+              <p className="text-2xl leading-8 font-bold text-accent">
+                {formatPrice(average, lang)} <span className="text-sm font-medium">{t.currency}</span>
+              </p>
+              <p className="text-xs leading-[18px]">{t.averageHint(unit)}</p>
+            </Card>
+          </div>
         </div>
 
-        {product.markets && product.markets.length > 0 ? (
-          <div className="divide-y divide-gray-100">
-            {product.markets.map((m: any, index: number) => (
-              <div
-                key={index}
-                className="p-4 sm:p-5 flex items-center justify-between hover:bg-gray-50/80 transition"
-              >
-                <div>
-                  <p className="font-semibold text-gray-900 text-base">
-                    {m.market}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    বিভাগ: {m.division}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-base sm:text-lg font-bold text-gray-900">
-                    ৳ {toBanglaNum(m.min)} - ৳ {toBanglaNum(m.max)}
-                  </div>
-                  <span className="text-xs text-gray-500 font-normal">
-                    {getUnitBn(product.unit)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-8 text-center text-gray-500 text-sm">
-            এই মুহূর্তে আলাদা কোনো বাজারের তথ্য পাওয়া যায়নি।
-          </div>
-        )}
-      </div>
+        {/* the price in every market */}
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg leading-7 font-semibold">{t.marketPrices}</h2>
+          <MarketTable markets={product.markets} lang={lang} />
+        </div>
+      </Card>
     </div>
   );
 }

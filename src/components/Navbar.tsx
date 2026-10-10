@@ -1,45 +1,50 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { texts } from "@/data/texts";
+import { getCategories } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { getToday } from "@/lib/format";
+import { getLang } from "@/lib/language";
+import CategoryLinks from "./category-links";
+import LanguageToggle from "./language-toggle";
+import UserMenu from "./user-menu";
 
-export interface INav {
-  id: string;
-  slug: string;
-  nameBn: string;
-  icon: string;
-}
+export default async function Navbar() {
+  const lang = await getLang();
+  const t = texts[lang];
+  const categories = await getCategories();
 
-const Navbar = async () => {
-  let data: INav[] = [];
-
-  try {
-    const res = await fetch(
-      "https://api.api-store.workers.dev/api/bazardor/categories",
-      {
-        next: { revalidate: 3600 },
-      },
-    );
-    data = await res.json();
-  } catch (error) {
-    console.error("Failed to fetch categories:", error);
-  }
+  // who is signed in? session is null when nobody is signed in
+  const session = await auth.api.getSession({ headers: await headers() });
+  const user = session
+    ? { name: session.user.name, email: session.user.email, image: session.user.image }
+    : null;
 
   return (
-    <nav className=" mt-4 pt-2 border-t border-gray-200/80">
-      <div className="max-w-7xl mx-auto px-2">
-        <div className="flex items-center justify-center md:justify-start gap-2 md:gap-4 overflow-x-auto no-scrollbar py-1">
-          {data?.map((item) => (
-            <Link
-              key={item.id || item.slug}
-              href={`/${item.slug}`}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm md:text-base font-medium text-gray-700 hover:text-[#008744] hover:bg-emerald-50 transition-all shrink-0"
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span>{item.nameBn}</span>
-            </Link>
-          ))}
+    <header className="border-b border-border bg-surface">
+      <div className="mx-auto flex max-w-[1152px] flex-wrap items-center justify-between gap-2 px-4 py-3">
+        {/* logo and today's date */}
+        <Link href="/" className="flex items-center gap-2">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-lg text-accent-foreground">
+            🛒
+          </span>
+          <span className="flex flex-col whitespace-nowrap">
+            <span className="text-xl leading-7 font-bold">{t.siteName}</span>
+            <span className="text-xs leading-4">{getToday(lang)}</span>
+          </span>
+        </Link>
+
+        {/* language buttons and sign in / user menu */}
+        <div className="ml-auto flex items-center gap-2">
+          <LanguageToggle lang={lang} />
+          <UserMenu user={user} lang={lang} />
         </div>
       </div>
-    </nav>
-  );
-};
 
-export default Navbar;
+      {/* category links */}
+      <div className="border-t border-separator">
+        <CategoryLinks categories={categories} lang={lang} />
+      </div>
+    </header>
+  );
+}

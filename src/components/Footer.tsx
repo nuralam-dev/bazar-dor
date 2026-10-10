@@ -1,17 +1,16 @@
-const Footer = () => {
-  return (
-    <footer className="w-full bg-[#f8faf9] border-t border-gray-200/80 py-6 px-4 md:px-12 mt-auto">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-xs md:text-sm text-gray-600">
-        <p className="text-center md:text-left">
-          বাজার দর — প্রয়োজনীয় পণ্যের দাম এক নজরে।
-        </p>
+import { texts } from "@/data/texts";
+import { getLang } from "@/lib/language";
 
-        <p className="text-center md:text-right">
-          সকল দাম সম্ভাব্য; বাজার অবস্থার উপর নির্ভর করে পরিবর্তিত হয়।
-        </p>
+export default async function Footer() {
+  const lang = await getLang();
+  const t = texts[lang];
+
+  return (
+    <footer className="border-t border-border bg-surface">
+      <div className="mx-auto flex max-w-[1152px] flex-col items-center justify-between gap-2 px-4 py-6 text-center text-sm md:flex-row">
+        <p>{t.footerLeft}</p>
+        <p>{t.footerRight}</p>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}
